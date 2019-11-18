@@ -1,19 +1,31 @@
 import sys
+import os
 import argparse
+import subprocess as sub
 
-class regression_test:
-    def __init__(self):
-        self._test = []
+class test_base:
+    def __init__(self, name):
+        self._name = name
+        self._cwd = None
+    def set_cwd(self, cwd):
+        self._cwd = cwd
+    def get_cwd(self):
+        return self._cwd
+
+class regression_test(test_base):
+    def __init__(self, top_name):
+        super().__init__(top_name)
+        self._tests = []
+        self.set_cwd(top_name)
     def create_test(self, test_name):
         t = test(test_name)
-        self.add_test(t)
-        return test(test_name)
-    def add_test(self, t):
-        self._test.append(t)
+        t.set_cwd(self.get_cwd() + '/' + test_name)
+        self._tests.append(t)
+        return t
     def show_test(self):
         print("[test_name]")
-        for i in self._test:
-            print(i.test_name)
+        for i in self._tests:
+            print(i._name)
     def process(self):
         parser = argparse.ArgumentParser()
         #parser.add_argument('')
@@ -24,27 +36,60 @@ class regression_test:
         #self._gen_pytest()
         #self._run_pytest()
 
-class test:
+class test(test_base):
     def __init__(self, test_name):
-        self.test_name = test_name
-        pass
+        super().__init__(test_name)
+        self._jobs = []
     def create_job(self, job_name):
-        return job(job_name)
+        j = job(job_name)
+        j.set_cwd(self.get_cwd() + '/' + job_name)
+        self._jobs.append(j)
+        return j
+    def run(self):
+        for j in self._jobs:
+            j.run()
 
-class job:
+class job(test_base):
     def __init__(self, job_name):
-        self.job_name = job_name
-        self._dep_jobs = []
-        self.files = lambda: None
-        self.files.links = []
-        self.files.copys = []
-        self.env_vars = [[]]
-        self.cmds = lambda: None
-        self.cmds.steps = []
-        self.cmds.result_checks = []
-    def add_dependency(self, job):
-        self._dep_jobs.append(job)
-    def working_dir(self):
-        pass
+        super().__init__(job_name)
+        self.file = file()
+        self.env = env_vars()
+        self.cmd = cmd()
+    def run(self):
+        cwd = self.get_cwd()
+        sub.run('mkdir -p ' + cwd, shell=True, check=True)
+        self.file.prepare(cwd)
+        self.env.setup()
+        self.cmd.execute(cwd)
 
 
+class file:
+    def __init__(self):
+        self.links = []
+        self.copys = []
+    def prepare(self, cwd):
+        for f in self.links:
+            sub.run("ln -sf", shell=True, check=True, cwd=cwd)
+        for f in self.links:
+            sub.run("cp -fr", shell=True, check=True, cwd=cwd)
+
+
+class env_vars:
+    def __init__(self):
+        self._env = {}
+    def append(self, env):
+        self._env.update(env)
+    def setup(self):
+        for k,v in self._env:
+            os.environ[k] = v
+        
+class cmd():
+    def __init__(self):
+        self.steps = []
+        self.result_checks = []
+    def execute(self, cwd):
+        for s in self.steps:
+            sub.run(s, shell=True, check=True, cwd=cwd)
+        for s in self.result_checks:
+            sub.run(s, shell=True, check=True, cwd=cwd)
+            
