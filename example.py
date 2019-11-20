@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from tiny_regression_test import regression_test
 
 rt = regression_test("test_ws")

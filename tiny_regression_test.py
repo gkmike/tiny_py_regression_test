@@ -7,10 +7,17 @@ class test_base:
     def __init__(self, name):
         self._name = name
         self._cwd = None
+        self._skip = False
     def set_cwd(self, cwd):
         self._cwd = cwd
     def get_cwd(self):
         return self._cwd
+    def get_name(self):
+        return self._name
+    def status(self):
+        if self._skip:
+            return " (skipped)"
+        return ""
 
 class regression_test(test_base):
     def __init__(self, top_name):
@@ -23,15 +30,31 @@ class regression_test(test_base):
         self._tests.append(t)
         return t
     def show_test(self):
-        print("[test_name]")
-        for i in self._tests:
-            print(i._name)
+        print("[test list]")
+        for t in self._tests:
+            print (t.get_name() + t.status())
+            for j in t._jobs:
+                print("  " + j.get_name() + j.status())
     def process(self):
         parser = argparse.ArgumentParser()
-        #parser.add_argument('')
-        parser.parse_args()
+        parser.add_argument('-a', '--all', action='store_true', help='run all test')
+        parser.add_argument('-t', '--test', nargs='*', help='run the specified test only')
+        parser.add_argument('-j', '--job', nargs='*', help='run the specified job only')
+        args = parser.parse_args()
         if len(sys.argv) == 1:
             self.show_test()
+            parser.print_help()
+        for t in self._tests:
+            if args.test:
+                if t.get_name() not in args.test:
+                    t._skip = True
+            if args.job:
+                for j in t._jobs:
+                    if j.get_name() not in args.job:
+                        j._skip = True
+        self.show_test()
+        for t in self._tests:
+            t.run()
         #self._cwd_proc()
         #self._gen_pytest()
         #self._run_pytest()
