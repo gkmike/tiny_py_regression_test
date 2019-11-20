@@ -44,6 +44,7 @@ class regression_test(test_base):
         if len(sys.argv) == 1:
             self.show_test()
             parser.print_help()
+            return
         for t in self._tests:
             if args.test:
                 if t.get_name() not in args.test:
@@ -69,6 +70,7 @@ class test(test_base):
         self._jobs.append(j)
         return j
     def run(self):
+        print("running test " + self.get_name())
         for j in self._jobs:
             j.run()
 
@@ -79,6 +81,7 @@ class job(test_base):
         self.env = env_vars()
         self.cmd = cmd()
     def run(self):
+        print("running job " + self.get_name())
         cwd = self.get_cwd()
         sub.run('mkdir -p ' + cwd, shell=True, check=True)
         self.file.prepare(cwd)
@@ -92,9 +95,9 @@ class file:
         self.copys = []
     def prepare(self, cwd):
         for f in self.links:
-            sub.run("ln -sf", shell=True, check=True, cwd=cwd)
-        for f in self.links:
-            sub.run("cp -fr", shell=True, check=True, cwd=cwd)
+            sub.run("ln -sf " + os.path.abspath(f) + " .", shell=True, check=True, cwd=cwd)
+        for f in self.copys:
+            sub.run("cp -rf " + os.path.abspath(f) + " .", shell=True, check=True, cwd=cwd)
 
 
 class env_vars:
@@ -103,7 +106,7 @@ class env_vars:
     def append(self, env):
         self._env.update(env)
     def setup(self):
-        for k,v in self._env:
+        for k,v in self._env.items():
             os.environ[k] = v
         
 class cmd():
