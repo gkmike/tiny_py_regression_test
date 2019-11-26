@@ -55,7 +55,8 @@ class regression_test(test_base):
                         j._skip = True
         self.show_test()
         for t in self._tests:
-            t.run()
+            if not t._skip: 
+                t.run()
         #self._cwd_proc()
         #self._gen_pytest()
         #self._run_pytest()
@@ -72,7 +73,8 @@ class test(test_base):
     def run(self):
         print("running test " + self.get_name())
         for j in self._jobs:
-            j.run()
+            if not j._skip: 
+                j.run() 
 
 class job(test_base):
     def __init__(self, job_name):
@@ -83,6 +85,7 @@ class job(test_base):
     def run(self):
         print("running job " + self.get_name())
         cwd = self.get_cwd()
+        sub.run('rm -rf ' + cwd, shell=True, check=True)
         sub.run('mkdir -p ' + cwd, shell=True, check=True)
         self.file.prepare(cwd)
         self.env.setup()
