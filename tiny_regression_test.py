@@ -3,6 +3,7 @@ import os
 import argparse
 import subprocess as sub
 import copy
+import threading
 
 class test_base:
     def __init__(self, name):
@@ -55,9 +56,14 @@ class regression_test(test_base):
                     if j.get_name() not in args.job:
                         j._skip = True
         self.show_test()
+        threads = []
         for t in self._tests:
             if not t._skip: 
-                t._run()
+                th = threading.Thread(target=t._run)
+                th.start()
+                
+        for th in threads:
+            th.join()
         #self._cwd_proc()
         #self._gen_pytest()
         #self._run_pytest()
