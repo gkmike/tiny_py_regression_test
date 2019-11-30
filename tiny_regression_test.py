@@ -35,7 +35,7 @@ class regression_test(test_base):
         for t in self._tests:
             print (t.get_name() + t.get_status() + " [test] [path=" + t.get_cwd() + "]")
             for j in t._jobs:
-                print("    " + j.get_name() + j.get_status() + " [job] [path=" + t.get_cwd() + "]")
+                print("    " + j.get_name() + j.get_status() + " [job] [path=" + j.get_cwd() + "]")
     def process(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-a', '--all', action='store_true', help='run all test')
@@ -96,6 +96,7 @@ class job(test_base):
         self.file = copy.deepcopy(j.file)
         self.env = copy.deepcopy(j.env)
         self.cmd = copy.deepcopy(j.cmd)
+        return self
 
 class file:
     def __init__(self):
