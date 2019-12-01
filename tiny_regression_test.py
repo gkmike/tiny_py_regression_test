@@ -6,44 +6,77 @@ import copy
 import threading
 
 class test_base:
-    def __init__(self, name):
+    def __init__(self, name: str):
         self._name = name
         self._skip = False
         self._parent = None
         self._event = threading.Event()
         self._wait_test = None
-        self._status = ""
-    def get_cwd(self):
+        self._status = "init"
+        self._type = None
+        self._sub_tests = []
+    def get_cwd(self) -> str:
         if self._parent:
             return self._parent.get_cwd() + "/" + self.get_name()
         else:
             return self.get_name()
-    def get_name(self):
+    def get_name(self) -> str:
         return self._name
-    def set_skip(self):
-        self._skip = True
-        self._status = "(skipped)"
-    def get_status(self):
+    def filter_sub_test(self, name_to_run, type_name):
+        for t in self._sub_tests:
+            if name_to_run not in t._name:
+                if type_name == t._type:
+                    t._event.set()
+                    t._skip = True
+                t.filter_test(name_to_run, type_name)
+        return self
+    def get_status(self) -> str:
         return self._status
     def after(self, test):
         self._wait_test = test
         return self
+    def _add_sub_test(self, test):
+        test._parent = self
+        self._sub_tests.append(test)
+    def _set_type(self, t: str):
+        self._type = t
+        return self
+    def _show_test(self, indent=0):
+        print(" " * indent, self.get_name(), "type=" + self._type, 
+              "cwd="+self.get_cwd(), "status=" + self.get_status())
+        for t in self._sub_tests:
+            t._show_test(indent+4)
+    def _run(self):
+        raise NotImplementedError("class should impl run")
+    def _wrap_run(self):
+        if self._wait_test:
+            print(self.get_name() + " waiting...")
+            self._wait_test._event.wait()
+        print("(running) " + self.get_name())
+        if not self._skip: 
+            self._run()
+            print("(done) " + self.get_name())
+        else:
+            print("(skipped) " + self.get_name())
+        self._event.set()
+    def _parallel_run(self):
+        threads = []
+        for t in self._sub_tests:
+            if not t._skip: 
+                th = threading.Thread(target=t._wrap_run)
+                threads.append(th)
+                th.start()
+        for th in threads:
+            th.join()
 
 class regression_test(test_base):
     def __init__(self, top_name):
         super().__init__(top_name)
-        self._tests = []
-    def create_test(self, test_name):
-        t = test(test_name)
-        t._parent = self
-        self._tests.append(t)
+        self._set_type("top")
+    def create_test(self, name):
+        t = test(name)._set_type("test")
+        self._add_sub_test(t)
         return t
-    def show_test(self):
-        print(self.get_name() + " [test list]")
-        for t in self._tests:
-            print (t.get_name() + ": " + t.get_status() + " [test] [path=" + t.get_cwd() + "]")
-            for j in t._jobs:
-                print("    " + j.get_name() + ": " + j.get_status() + " [job] [path=" + j.get_cwd() + "]")
     def process(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-a', '--all', action='store_true', help='run all test')
@@ -51,31 +84,17 @@ class regression_test(test_base):
         parser.add_argument('-j', '--job', nargs='*', help='run the specified job only')
         args = parser.parse_args()
         if len(sys.argv) == 1:
-            self.show_test()
+            print("=" * 80)
+            self._show_test()
+            print("=" * 80)
             parser.print_help()
             return
-        for t in self._tests:
-            if args.test:
-                if t.get_name() not in args.test:
-                    t._skip = True
-                    t._event.set()
-            if args.job:
-                for j in t._jobs:
-                    if j.get_name() not in args.job:
-                        j._skip = True
-                        j._event.set()
-        self.show_test()
-        threads = []
-        for t in self._tests:
-            if not t._skip: 
-                th = threading.Thread(target=t._run)
-                threads.append(th)
-                th.start()
-                
-        for th in threads:
-            th.join()
-        print("DDDDDDDDDDDDDDDDDDDDDDDDDDD")
-        self.show_test()
+        if args.test:
+            self.filter_sub_test(args.test, "test")
+        if args.job:
+            self.filter_sub_test(args.job, "job")
+        self._parallel_run()
+        self._show_test()
         #self._cwd_proc()
         #self._gen_pytest()
         #self._run_pytest()
@@ -83,21 +102,14 @@ class regression_test(test_base):
 class test(test_base):
     def __init__(self, test_name):
         super().__init__(test_name)
-        self._jobs = []
-    def create_job(self, job_name):
-        j = job(job_name)
-        j._parent = self
-        self._jobs.append(j)
+    def create_job(self, name):
+        j = job(name)._set_type("job")
+        self._add_sub_test(j)
         return j
     def _run(self):
-        if self._wait_test:
-            print(self.get_name() + " waiting...")
-            self._wait_test._event.wait()
-        print("running test " + self.get_name())
-        for j in self._jobs:
+        for j in self._sub_tests:
             if not j._skip: 
-                j._run()
-        self._event.set()
+                j._wrap_run()
         
 
 class job(test_base):
@@ -107,10 +119,6 @@ class job(test_base):
         self.env = env()
         self.cmd = cmd()
     def _run(self):
-        if self._wait_test:
-            print(self.get_name() + " waiting...")
-            self._wait_test._event.wait()
-        print("running job " + self.get_name())
         cwd = self.get_cwd()
         sub.run('rm -rf ' + cwd, shell=True)
         sub.run('mkdir -p ' + cwd, shell=True)
@@ -121,7 +129,6 @@ class job(test_base):
             self._status = "done"
         else:
             self._status = "fail (exit_code: " + str(ret) + ")"
-        self._event.set()
     def copy_from(self, j):
         self.file = copy.deepcopy(j.file)
         self.env = copy.deepcopy(j.env)
