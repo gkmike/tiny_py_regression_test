@@ -1,6 +1,9 @@
+#include <assert.h>
 #include <stdio.h>
-int main()
+int main(int argc, char *argv[])
 {
-	printf("hello world\n");
+   assert(argc > 1);
+   char *s = argv[1];
+	printf("hello world %s\n", s);
 	return 0;
 }
