@@ -46,6 +46,7 @@ class test_base:
         self._sub_tests = []
         self._job_threads = []
         self._gui_cells = None
+        self._ret_code = -1
     def get_cwd(self) -> str:
         if self._parent:
             return self._parent.get_cwd() + "/" + self.get_name()
@@ -54,13 +55,21 @@ class test_base:
     def get_name(self) -> str:
         return self._name
     def filter_sub_test(self, name_to_run, type_name):
-        for t in self._sub_tests:
-            if name_to_run not in t._name:
-                if type_name == t._type:
+        for t in self._sub_tests:            
+            if type_name == t._type:
+                if name_to_run not in t._name:
                     t._event.set()
                     t._skip = True
-                t.filter_test(name_to_run, type_name)
+                    t._status = "skipped"
+                    print(t._name, " SSSSSSSSS")
+                    t.set_gui_text("status", "skipped")
+            t.filter_sub_test(name_to_run, type_name)
         return self
+    def set_gui_text(self, cell, text):
+        global g_gui
+        global gui_en
+        if gui_en:
+            self._gui_cells[self._type][cell]["text"].set(text)
     def get_status(self) -> str:
         return self._status
     def after(self, test):
@@ -73,41 +82,32 @@ class test_base:
         self._type = t
         return self
     def _show_test(self, indent=0):
-        #print(" " * indent, self.get_name(), "type=" + self._type, 
-        #      "cwd="+self.get_cwd(), "status=" + self.get_status())
+        print(" " * indent + self.get_cwd(), " [status=" + self.get_status() + "]")
         for t in self._sub_tests:
             t._show_test(indent+4)
-        
+    def is_sub_tests_passed(self):
+        for t in self._sub_tests:
+            if t._ret_code != 0:
+                return False
+            return t.is_sub_tests_passed()
+        return True
     def _run(self):
         raise NotImplementedError("class should impl run")
     def _wrap_run(self):
-        ret = 0
-        global g_gui, gui_en
+        global g_gui
+        global gui_en
         if self._wait_test:
             print(self.get_name() + " waiting...")
-            if gui_en:
-                self._gui_cells[self._type]["status"]["text"].set("wait dependency")
+            self.set_gui_text("status", "wait dependency")
             self._wait_test._event.wait()
         print("(running) " + self.get_name())
-        if not self._skip: 
-            #s.set("running")
-            if gui_en:
-                self._gui_cells[self._type]["status"]["text"].set("running")
-            ret = self._run()
-            if gui_en:
-                self._gui_cells[self._type]["status"]["text"].set("end")
-            print("(done) " + self.get_name())
-            #s.set("done")
-        else:
-            #s.set("skipped")
-            print("(skipped) " + self.get_name())
-            if gui_en:
-                self._gui_cells[self._type]["status"]["text"].set("skipped")
-        if gui_en:
-            self._gui_cells[self._type]["status"]["text"].set(self._status)
-        #r.set(self._status)
+        self.set_gui_text("status", "running")
+        self._ret_code = self._run()
+        self.set_gui_text("status", "done")
+        print("(done) " + self.get_name())
+        self.set_gui_text("status", self._status)
         self._event.set()
-        return ret
+        return self._ret_code
     def _parallel_run(self):
         for t in self._sub_tests:
             if not t._skip: 
@@ -128,31 +128,44 @@ class regression_test(test_base):
         global g_gui
         t._gui_cells = g_gui.add_row(t._name , "", "", "")
         return t
+    def show_test(self, indent=0):
+        print("=" * 80)
+        self._show_test(indent)
+        print("=" * 80)        
     def process(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-a', '--all', action='store_true', help='run all test')
         parser.add_argument('-t', '--test', nargs='*', help='run the specified test only')
         parser.add_argument('-j', '--job', nargs='*', help='run the specified job only')
+        parser.add_argument('-l', '--list', action='store_true', help='list test only (dry run)')
         parser.add_argument('-g', '--gui', action='store_true', help='enable gui')
         args = parser.parse_args()
         if len(sys.argv) == 1:
-            print("=" * 80)
-            self._show_test()
-            print("=" * 80)
             parser.print_help()
             return
         if args.test:
-            self.filter_sub_test(args.test, "test")
+            for t in args.test:
+                self.filter_sub_test(t, "test")
         if args.job:
-            self.filter_sub_test(args.job, "job")
-        self._parallel_run()            
+            for j in args.job:
+                self.filter_sub_test(j, "job")
+        if not args.gui:
+            global gui_en
+            gui_en = False
+        if args.list:
+            self.show_test()
+            return
+        else:
+            self._parallel_run()            
         if args.gui:
             global g_gui
             g_gui.run()
-        else:
-            global gui_en
-            gui_en = False
         self._wait_job_done()
+        if self.is_sub_tests_passed():
+            self._status = "passed"
+        else:
+            self._status = "failed"
+        self.show_test()
         #self._show_test()
         #self._cwd_proc()
         #self._gen_pytest()
@@ -168,14 +181,14 @@ class test(test_base):
         j._gui_cells = g_gui.add_row("", "", j._name, "")
         return j
     def _run(self):
-        ret = 0
         for j in self._sub_tests:
             if not j._skip: 
-                ret = j._wrap_run()
-                if ret != 0:
-                    self._status = "fail"
-                    return ret
-        self._status = "ok"
+                self._ret_code = j._wrap_run()
+                if self._ret_code != 0:
+                    self._status = "failed"
+                    return self._ret_code
+        self._status = "passed"
+        return 0
         
 
 class job(test_base):
@@ -190,12 +203,12 @@ class job(test_base):
         sub.run('mkdir -p ' + cwd, shell=True)
         self.file._put(cwd)
         self.env._setup()
-        ret = self.cmd._run(cwd)
-        if ret == 0:
+        self._ret_code = self.cmd._run(cwd)
+        if self._ret_code == 0:
             self._status = "done"
         else:
-            self._status = "fail (exit_code: " + str(ret) + ")"
-        return ret
+            self._status = "fail (exit_code: " + str(self._ret_code) + ")"
+        return self._ret_code
         
     def copy_from(self, j):
         self.file = copy.deepcopy(j.file)
