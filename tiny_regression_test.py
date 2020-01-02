@@ -4,31 +4,41 @@ import argparse
 import subprocess as sub
 import copy
 import threading
+import tkinter.ttk as ttk
 import tkinter as tk
 
 class test_gui:
     def __init__(self):
         self.root = tk.Tk()
+        #self.root.geometry("500x500")
         self.row_ptr = 0
         self.col_ptr = 0
-        self.add_row("test_name", "test_status", "job_name", "job_status",)
-    def add_cell(self, text, row, col):
-        s = tk.StringVar()
-        b = tk.Entry(self.root, state="readonly", textvariable=s)
-        s.set(text)
-        b.grid(row=row, column=col)
-        return {'entry': b, 'text': s}
-    def add_row(self, a, b, c, d):
-        t_name_cell = self.add_cell(a, self.row_ptr, 0)
-        t_status_cell = self.add_cell(b, self.row_ptr, 1)
-        j_name_cell = self.add_cell(c, self.row_ptr, 2)
-        j_status_cell = self.add_cell(d, self.row_ptr, 3)
+        self.tv = ttk.Treeview(self.root,columns=['0','1','2', '3'], show='headings')
+        self.tv.heading('0',text='test_name')
+        self.tv.heading('1',text='test_status')
+        self.tv.heading('2',text='job_name')
+        self.tv.heading('3',text='job_status')
+        self.tv.pack(side='left', fill='both')
+        self.tv.tag_configure('gray', background='#cccccc')
+        self.tv.tag_configure('pass', foreground='green')
+        self.tv.tag_configure('fail', foreground='red')
+        vsb = ttk.Scrollbar(self.root, orient="vertical", command=self.tv.yview)
+        vsb.pack(side='right', fill='y')
+        self.tv.configure(yscrollcommand=vsb.set)
+        def on_close():
+            self.root.destroy()
+            quit()
+        self.root.protocol("WM_DELETE_WINDOW", on_close)
+
+    def add_row(self, text_list):
         self.row_ptr += 1
-        return {
-                'test': {'name': t_name_cell, 'status': t_status_cell},
-                'job': {'name': j_name_cell, 'status': j_status_cell}
-                }
-    def run(self):
+        if self.row_ptr % 2 == 0:
+            tag = 'gray'
+        else:
+            tag = 'white'
+        return self.tv.insert('', 'end', value=text_list, tag=tag)
+    def run(self, job_after):
+        self.root.after(0, job_after)
         self.root.mainloop()
  
 g_gui = test_gui()
@@ -45,7 +55,7 @@ class test_base:
         self._type = None
         self._sub_tests = []
         self._job_threads = []
-        self._gui_cells = None
+        self._gui_tv_row_id = None
         self._ret_code = -1
     def get_cwd(self) -> str:
         if self._parent:
@@ -61,7 +71,6 @@ class test_base:
                     t._event.set()
                     t._skip = True
                     t._status = "skipped"
-                    print(t._name, " SSSSSSSSS")
                     t.set_gui_text("status", "skipped")
             t.filter_sub_test(name_to_run, type_name)
         return self
@@ -69,7 +78,11 @@ class test_base:
         global g_gui
         global gui_en
         if gui_en:
-            self._gui_cells[self._type][cell]["text"].set(text)
+            g_gui.tv.set(self._gui_tv_row_id, '3', text)
+            if "pass" in text:
+                g_gui.tv.item(self._gui_tv_row_id, tag="pass")
+            if "fail" in text:
+                g_gui.tv.item(self._gui_tv_row_id, tag="fail")
     def get_status(self) -> str:
         return self._status
     def after(self, test):
@@ -97,14 +110,11 @@ class test_base:
         global g_gui
         global gui_en
         if self._wait_test:
-            print(self.get_name() + " waiting...")
             self.set_gui_text("status", "wait dependency")
             self._wait_test._event.wait()
-        print("(running) " + self.get_name())
         self.set_gui_text("status", "running")
         self._ret_code = self._run()
         self.set_gui_text("status", "done")
-        print("(done) " + self.get_name())
         self.set_gui_text("status", self._status)
         self._event.set()
         return self._ret_code
@@ -112,6 +122,7 @@ class test_base:
         for t in self._sub_tests:
             if not t._skip: 
                 th = threading.Thread(target=t._wrap_run)
+                th.setDaemon(True)
                 self._job_threads.append(th)
                 th.start()
     def _wait_job_done(self):
@@ -126,7 +137,7 @@ class regression_test(test_base):
         t = test(name)._set_type("test")
         self._add_sub_test(t)
         global g_gui
-        t._gui_cells = g_gui.add_row(t._name , "", "", "")
+        t._gui_tv_row_id = g_gui.add_row([t._name , "", "", ""])
         return t
     def show_test(self, indent=0):
         print("=" * 80)
@@ -155,11 +166,12 @@ class regression_test(test_base):
         if args.list:
             self.show_test()
             return
-        else:
-            self._parallel_run()            
+                       
         if args.gui:
             global g_gui
-            g_gui.run()
+            g_gui.run(self._parallel_run)
+        else:
+            self._parallel_run()
         self._wait_job_done()
         if self.is_sub_tests_passed():
             self._status = "passed"
@@ -178,7 +190,7 @@ class test(test_base):
         j = job(name)._set_type("job")
         self._add_sub_test(j)
         global g_gui
-        j._gui_cells = g_gui.add_row("", "", j._name, "")
+        j._gui_tv_row_id = g_gui.add_row(["", "", j._name, ""])
         return j
     def _run(self):
         for j in self._sub_tests:

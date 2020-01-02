@@ -21,4 +21,11 @@ build_job2 = test2.create_job("build_code").copy_from(build_job).after(sim_job)
 build_job2.env.set("OPT", "-O0")
 sim_job2 = test2.create_job("run_program").copy_from(sim_job)
 
+last_job = sim_job2
+#for i in range(100):
+#    testx = rt.create_test("code_test" + str(i))
+#    j1 = testx.create_job("build_code").copy_from(build_job).after(last_job)
+#    j2 = testx.create_job("run_program").copy_from(sim_job)
+#    last_job = j2
+
 rt.process()
