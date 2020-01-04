@@ -11,6 +11,9 @@ build_job.env.set("STR", "123")
 build_job.cmd.add("make")
 build_job.cmd.add("test a.out")
 
+build_job.file.links.replace('example/src/*', "example/src/*")
+
+
 sim_job = test.create_job("run_program")
 sim_job.file.links.add(build_job.get_cwd() + '/*')
 sim_job.cmd.add("make run > result.txt")
@@ -18,7 +21,7 @@ sim_job.cmd.add("diff golden.txt result.txt")
 
 test2 = rt.create_test("code_test_no_opt")
 build_job2 = test2.create_job("build_code").copy_from(build_job).after(sim_job)
-build_job2.env.set("OPT", "-O0")
+build_job2.env.set("OPT", "-O0w")
 sim_job2 = test2.create_job("run_program").copy_from(sim_job)
 
 last_job = sim_job2
