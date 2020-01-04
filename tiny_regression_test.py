@@ -310,8 +310,11 @@ class cmd():
             raise ValueError('"' + cmd_from + '" not in command list')
         return self
     def _run(self, cwd):
+        f = open(cwd + '/run.log', 'a')
         for s in self._steps:
-            s = sub.run(s, shell=True, cwd=cwd)
+            s = sub.run(s, shell=True, cwd=cwd, stdout=f, stderr=f)
             if s.returncode != 0:
+                f.close()
                 return s.returncode
+        f.close()
         return 0

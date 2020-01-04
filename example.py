@@ -11,9 +11,6 @@ build_job.env.set("STR", "123")
 build_job.cmd.add("make")
 build_job.cmd.add("test a.out")
 
-build_job.file.links.replace('example/src/*', "example/src/*")
-
-
 sim_job = test.create_job("run_program")
 sim_job.file.links.add(build_job.get_cwd() + '/*')
 sim_job.cmd.add("make run > result.txt")
