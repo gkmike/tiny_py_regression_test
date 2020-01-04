@@ -8,7 +8,7 @@ build_job.file.links.add("example/src/*")
 build_job.file.copys.add("example/pat/*")
 build_job.env.set("OPT", "-O2")
 build_job.env.set("STR", "123")
-build_job.cmd.add("make")
+build_job.cmd.add("make 2")
 build_job.cmd.add("test a.out")
 
 sim_job = test.create_job("run_program")

@@ -112,6 +112,11 @@ class test_base:
         if self._wait_test:
             self.set_gui_text("status", "wait_dependency")
             self._wait_test._event.wait()
+            if self._wait_test._ret_code != 0:
+                self.set_gui_text("status", "dependency error")
+                self._status = "dependency error"
+                self._event.set()
+                return -1
         self.set_gui_text("status", "running")
         self._ret_code = self._run()
         self.set_gui_text("status", "done")
@@ -199,14 +204,19 @@ class test(test_base):
         j._gui_tv_row_id = g_gui.add_row(["", "", j._name, ""])
         return j
     def _run(self):
+        ret_code = 0
         for j in self._sub_tests:
-            if not j._skip: 
-                self._ret_code = j._wrap_run()
-                if self._ret_code != 0:
-                    self._status = "failed"
-                    return self._ret_code
-        self._status = "passed"
-        return 0
+            if not j._skip:
+                if ret_code == 0: 
+                    ret_code = j._wrap_run()
+                else:
+                    j._event.set()
+        if ret_code == 0:
+            self._status = "passed"
+        else:
+            self._status = "failed"
+        self._ret_code = ret_code
+        return ret_code
         
 
 class job(test_base):
