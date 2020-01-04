@@ -1,5 +1,6 @@
 import sys
 import os
+import time
 import argparse
 import subprocess as sub
 import copy
@@ -14,6 +15,7 @@ class test_gui:
         self.row_ptr = 0
         self.col_ptr = 0
         self.tv = ttk.Treeview(self.root,columns=['0','1','2', '3'], show='headings')
+        self.tv.bind('<ButtonRelease-1>', self.tv_click)
         self.tv.heading('0',text='test_name')
         self.tv.heading('1',text='test_status')
         self.tv.heading('2',text='job_name')
@@ -25,16 +27,38 @@ class test_gui:
         self.tv.tag_configure('running', background='yellow')
         self.tv.tag_configure('wait_dependency', background='lightblue')
         vsb = ttk.Scrollbar(self.root, orient="vertical", command=self.tv.yview)
-        vsb.pack(side='right', fill='y')
+        vsb.pack(side='left', fill='y')
         self.tv.configure(yscrollcommand=vsb.set)
+        self.text = tk.Text()
+        self.text.pack(side='left', fill='both')
+        
+        self.log_path_map = {}
         def on_close():
             self.root.destroy()
             quit()
         self.root.protocol("WM_DELETE_WINDOW", on_close)
 
-    def add_row(self, text_list):
+    def tv_click(self, e):
+        self.text.delete(1.0, tk.END)
+        self.text.insert(tk.END, ".....\n")
+        sn = self.tv.selection()[0]
+        if sn in self.log_path_map:
+            f = self.log_path_map[sn]
+            print(f)
+            proc = sub.Popen(['tail',f],stdout=sub.PIPE)
+            while True:
+                line = proc.stdout.readline()
+                if not line:
+                    break
+                line = line.decode()
+                self.text.insert(tk.END, line)
+
+    def add_row(self, text_list, log_path=None):
         self.row_ptr += 1
-        return self.tv.insert('', 'end', value=text_list)
+        sn = self.tv.insert('', 'end', value=text_list)
+        if log_path:
+            self.log_path_map[sn] = log_path
+        return sn
     def run(self, job_after):
         self.root.after(0, job_after)
         self.root.mainloop()
@@ -55,6 +79,7 @@ class test_base:
         self._job_threads = []
         self._gui_tv_row_id = None
         self._ret_code = -1
+        self._log_path = None
     def get_cwd(self) -> str:
         if self._parent:
             return self._parent.get_cwd() + "/" + self.get_name()
@@ -83,6 +108,13 @@ class test_base:
                 col = '3'
             g_gui.tv.set(self._gui_tv_row_id, col, text)
             g_gui.tv.item(self._gui_tv_row_id, tag=text)
+        else:
+            cwd = self.get_cwd()
+            cwd = ('...' + cwd[-25:]) if len(cwd) > 25 else cwd
+            output = '[' + time.asctime() + '] ' + cwd + " => " + text
+            print(" "*75, end='\r')
+            print(output, end='\r')
+            
     def get_status(self) -> str:
         return self._status
     def after(self, test):
@@ -94,10 +126,24 @@ class test_base:
     def _set_type(self, t: str):
         self._type = t
         return self
-    def _show_test(self, indent=0):
-        print(" " * indent + self.get_cwd(), " [status=" + self.get_status() + "]")
+    def _get_status_row(self):
+        rows = []
+        status = self._status
+        if self._type == "test":
+            rows.append([self._name, status, '', ''])
+        elif self._type == "job":
+            rows.append(['', '', self._name, status])
         for t in self._sub_tests:
-            t._show_test(indent+4)
+            row = t._get_status_row()
+            rows.extend(row)
+        
+        return rows
+    def _show_test(self, indent=0):
+        col = ['test_name', 'test_status', 'job_name', 'job_status']
+        rows = self._get_status_row()
+        tab = [col]
+        tab.extend(rows)
+        printTable(tab, self._name)
     def is_sub_tests_passed(self):
         for t in self._sub_tests:
             if t._ret_code != 0:
@@ -145,9 +191,7 @@ class regression_test(test_base):
         t._gui_tv_row_id = g_gui.add_row([t._name , "", "", ""])
         return t
     def show_test(self, indent=0):
-        print("=" * 80)
         self._show_test(indent)
-        print("=" * 80)        
     def process(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-a', '--all', action='store_true', help='run all test')
@@ -201,7 +245,8 @@ class test(test_base):
         j = job(name)._set_type("job")
         self._add_sub_test(j)
         global g_gui
-        j._gui_tv_row_id = g_gui.add_row(["", "", j._name, ""])
+        j._log_path = j.get_cwd() + '/run.log'
+        j._gui_tv_row_id = g_gui.add_row(["", "", j._name, ""], j._log_path)
         return j
     def _run(self):
         ret_code = 0
@@ -320,7 +365,9 @@ class cmd():
             raise ValueError('"' + cmd_from + '" not in command list')
         return self
     def _run(self, cwd):
-        f = open(cwd + '/run.log', 'a')
+        log_f = cwd + '/run.log'
+        sub.run('rm -f ' + log_f, shell=True)
+        f = open(log_f, 'a')
         for s in self._steps:
             s = sub.run(s, shell=True, cwd=cwd, stdout=f, stderr=f)
             if s.returncode != 0:
@@ -328,3 +375,22 @@ class cmd():
                 return s.returncode
         f.close()
         return 0
+
+"""
+printTable by poke
+https://stackoverflow.com/questions/19125237/a-text-table-writer-printer-for-python
+"""
+def printTable (tbl, top_name):
+    fh = open(top_name+ '_result.log', 'w')
+    cols = [list(x) for x in zip(*tbl)]
+    lengths = [max(map(len, map(str, col))) for col in cols]
+    f = '|' + '|'.join(' {:>%d} ' % l for l in lengths) + '|'
+    s = '+' + '+'.join('-' * (l+2) for l in lengths) + '+'
+    print(s)
+    fh.write(s + '\n')
+    for row in tbl:
+        r = f.format(*row)
+        print(r)
+        fh.write(r + '\n')
+        print(s)
+        fh.write(s + '\n')
