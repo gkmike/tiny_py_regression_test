@@ -1,12 +1,13 @@
 # tiny_py_regression_test
 run regression test by the python description.
-### Featrues
+## Featrues
 - Flow Control
   - multi-test paralle run with dependency supported
   - filter list to test supported
 - Folders Generation
+  - out-of-source build making your env clear
 - GUI View Supported
-- 
+  - check result easier
 
 ## Quick Start:
 ### example.py
@@ -62,4 +63,24 @@ rt.process()
 
 
 
-## Run 
+## Advanced Usage
+### show total test
+``` sh
+./example.py -l
+```
+
+### run specific test
+``` sh
+./example.py -t new
+```
+
+### run specific job
+``` sh
+./example.py -j run
+```
+
+
+### enable gui
+``` sh
+./example.py {ARGS} -g
+```
