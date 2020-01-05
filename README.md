@@ -1,5 +1,12 @@
 # tiny_py_regression_test
-run regression test by the python description
+run regression test by the python description.
+### Featrues
+- Flow Control
+  - multi-test paralle run with dependency supported
+  - filter list to test supported
+- Folders Generation
+- GUI View Supported
+- 
 
 ## Quick Start:
 ### example.py
@@ -48,7 +55,11 @@ rt.process()
 
 ### Run with GUI
 ``` sh
-./example.py -a
+./example.py -a -g
 ```
 #### result
 ![image](https://github.com/gkmike/tiny_py_regression_test/blob/master/img/gui.png)
+
+
+
+## Run 
