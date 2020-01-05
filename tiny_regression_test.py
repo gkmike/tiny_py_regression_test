@@ -97,7 +97,6 @@ class test_base:
             t.update_parent_status()
         if self._status == "":
             passed = self.is_sub_tests_passed()
-            print(self._name, passed)
             if passed:
                 self.set_gui_status("passed")
                 self._status = 'passed'
@@ -154,13 +153,13 @@ class test_base:
             else:
                 return
             g_gui.tv.set(self._gui_tv_row_id, col, text)
-            g_gui.tv.item(self._gui_tv_row_id, tag=text)
+            g_gui.tv.item(self._gui_tv_row_id, tag=tag)
         else:
             cwd = self.get_cwd()
-            cwd = ('...' + cwd[-25:]) if len(cwd) > 25 else cwd
+            cwd = ('...' + cwd[-40:]) if len(cwd) > 40 else cwd
             output = '[' + time.asctime() + '] ' + cwd + " => " + text
-            #print(" "*75, end='\r')
-            #print(output, end='\r')
+            print(" "*100, end='\r')
+            print(output, end='\r')
             
     def get_status(self) -> str:
         return self._status
@@ -194,7 +193,6 @@ class test_base:
     def is_sub_tests_passed(self):
         ret = True
         for t in self._sub_tests:
-            print("  ", t._name, t._ret_code)
             if t._ret_code != 0:
                 ret = False
         return ret
@@ -443,6 +441,7 @@ def printTable (tbl, top_name):
     lengths = [max(map(len, map(str, col))) for col in cols]
     f = '|' + '|'.join(' {:>%d} ' % l for l in lengths) + '|'
     s = '+' + '+'.join('-' * (l+2) for l in lengths) + '+'
+    print(" "*100, end='\r')
     print(s)
     fh.write(s + '\n')
     for row in tbl:
