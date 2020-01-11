@@ -22,7 +22,7 @@ class test_gui:
         self.tv.heading('3',text='job_status')
         self.tv.pack(side='left', fill='both')
         self.tv.tag_configure('skipped', background='#cccccc')
-        self.tv.tag_configure('passed', foreground='green')
+        self.tv.tag_configure('passed', foreground='forest green')
         self.tv.tag_configure('failed', foreground='red')
         self.tv.tag_configure('running', background='yellow')
         self.tv.tag_configure('waiting', background='lightblue')
@@ -43,15 +43,16 @@ class test_gui:
         sn = self.tv.selection()[0]
         if sn in self.log_path_map:
             f = self.log_path_map[sn]
-            self.text.insert(1.0, "tail " + f + "\n")
-            self.text.insert(tk.END, "-----\n")
-            proc = sub.Popen(['tail',f],stdout=sub.PIPE)
-            while True:
-                line = proc.stdout.readline()
-                if not line:
-                    break
-                line = line.decode()
-                self.text.insert(tk.END, line)
+            if os.path.isfile(f):
+                self.text.insert(1.0, "tail " + f + "\n")
+                self.text.insert(tk.END, "-----\n")
+                proc = sub.Popen(['tail',f],stdout=sub.PIPE)
+                while True:
+                    line = proc.stdout.readline()
+                    if not line:
+                        break
+                    line = line.decode()
+                    self.text.insert(tk.END, line)
 
     def add_row(self, text_list, log_path=None):
         self.row_ptr += 1
@@ -95,7 +96,7 @@ class test_base:
     def update_parent_status(self):
         for t in self._sub_tests:
             t.update_parent_status()
-        if self._status == "":
+        if self._status != "":
             passed = self.is_sub_tests_passed()
             if passed:
                 self.set_gui_status("passed")
