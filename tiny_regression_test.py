@@ -177,16 +177,16 @@ class test_base:
         rows = []
         status = self._status
         if self._type == "test":
-            rows.append([self._name, status, '', ''])
+            rows.append([self._name, status, '', '', ''])
         elif self._type == "job":
-            rows.append(['', '', self._name, status])
+            rows.append(['', '', self._name, status, self._log_path])
         for t in self._sub_tests:
             row = t._get_status_row()
             rows.extend(row)
         
         return rows
     def _show_test(self, indent=0):
-        col = ['test_name', 'test_status', 'job_name', 'job_status']
+        col = ['test_name', 'test_status', 'job_name', 'job_status', 'log']
         rows = self._get_status_row()
         tab = [col]
         tab.extend(rows)
