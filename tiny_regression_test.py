@@ -94,16 +94,21 @@ class test_base:
         self.update_parent_status()   
  
     def update_parent_status(self):
+        if len(self._sub_tests) == 0:
+            return
         for t in self._sub_tests:
             t.update_parent_status()
-        if self._status != "":
-            passed = self.is_sub_tests_passed()
-            if passed:
-                self.set_gui_status("passed")
-                self._status = 'passed'
-            else:
-                self.set_gui_status("failed")
-                self._status = 'failed'
+        passed = self.is_sub_tests_passed()
+        if passed is None:
+            self.set_gui_status("")
+            self._status = ''
+            return
+        if passed:
+            self.set_gui_status("passed")
+            self._status = 'passed'
+        else:
+            self.set_gui_status("failed")
+            self._status = 'failed'
 
 
     def update_last_status(self):
@@ -192,10 +197,14 @@ class test_base:
         tab.extend(rows)
         printTable(tab, self._name)
     def is_sub_tests_passed(self):
-        ret = True
+        ret = None
         for t in self._sub_tests:
-            if t._ret_code != 0:
-                ret = False
+            if t._status != "":
+                if t._ret_code != 0:
+                    ret = False
+                    return ret
+                else:
+                    ret = True
         return ret
     def _run(self):
         raise NotImplementedError("class should impl run")
