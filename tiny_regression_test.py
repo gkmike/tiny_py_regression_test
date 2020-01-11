@@ -8,6 +8,8 @@ import threading
 import tkinter.ttk as ttk
 import tkinter as tk
 
+failed_test_only = False
+
 class test_gui:
     def __init__(self):
         self.root = tk.Tk()
@@ -160,6 +162,9 @@ class test_base:
                 return
             g_gui.tv.set(self._gui_tv_row_id, col, text)
             g_gui.tv.item(self._gui_tv_row_id, tag=tag)
+            if failed_test_only:
+                if any(s in text for s in ['pass', 'skip']):
+                    g_gui.tv.delete(self._gui_tv_row_id)
         else:
             cwd = self.get_cwd()
             cwd = ('...' + cwd[-40:]) if len(cwd) > 40 else cwd
@@ -178,23 +183,24 @@ class test_base:
     def _set_type(self, t: str):
         self._type = t
         return self
-    def _get_status_row(self, failed_only):
+    def _get_status_row(self):
+        global failed_test_only
         rows = []
         status = self._status
         if self._type == "test":
             rows.append([self._name, status, '', '', ''])
         elif self._type == "job":
             rows.append(['', '', self._name, status, self._log_path])
-        if failed_only:
+        if failed_test_only:
             if all(s not in status for s in ['failed', 'error']):
                 rows = []
         for t in self._sub_tests:
-            row = t._get_status_row(failed_only)
+            row = t._get_status_row()
             rows.extend(row)
         return rows
-    def _show_test(self, failed_only):
+    def _show_test(self):
         col = ['test_name', 'test_status', 'job_name', 'job_status', 'log']
-        rows = self._get_status_row(failed_only)
+        rows = self._get_status_row()
         tab = [col]
         tab.extend(rows)
         printTable(tab, self._name)
@@ -247,8 +253,8 @@ class regression_test(test_base):
         global g_gui
         t._gui_tv_row_id = g_gui.add_row([t._name , "", "", ""])
         return t
-    def show_test(self, failed_only):
-        self._show_test(failed_only)
+    def show_test(self):
+        self._show_test()
     def process(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-a', '--all', action='store_true', help='run all test')
@@ -258,6 +264,8 @@ class regression_test(test_base):
         parser.add_argument('-g', '--gui', action='store_true', help='enable gui')
         parser.add_argument('-f', '--failed', action='store_true', help='show failed test only')
         args = parser.parse_args()
+        global failed_test_only
+        failed_test_only = args.failed
         if len(sys.argv) == 1:
             parser.print_help()
             return
@@ -284,7 +292,7 @@ class regression_test(test_base):
         else:
             if args.list:
                 self.update_status()
-                self.show_test(args.failed)
+                self.show_test()
                 return
             self._parallel_run()
         self._wait_job_done()
@@ -292,7 +300,7 @@ class regression_test(test_base):
             self._status = "passed"
         else:
             self._status = "failed"
-        self.show_test(args.failed)
+        self.show_test()
         #self._show_test()
         #self._cwd_proc()
         #self._gen_pytest()
