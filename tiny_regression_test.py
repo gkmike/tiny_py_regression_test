@@ -13,15 +13,14 @@ failed_test_only = False
 class test_gui:
     def __init__(self):
         self.root = tk.Tk()
-        #self.root.geometry("500x500")
         self.row_ptr = 0
         self.col_ptr = 0
-        self.tv = ttk.Treeview(self.root,columns=['0','1','2', '3'], show='headings')
+        self.tv = ttk.Treeview(self.root, columns=['0', '1', '2', '3'], show='headings')
         self.tv.bind('<ButtonRelease-1>', self.tv_click)
-        self.tv.heading('0',text='test_name')
-        self.tv.heading('1',text='test_status')
-        self.tv.heading('2',text='job_name')
-        self.tv.heading('3',text='job_status')
+        self.tv.heading('0', text='test_name')
+        self.tv.heading('1', text='test_status')
+        self.tv.heading('2', text='job_name')
+        self.tv.heading('3', text='job_status')
         self.tv.pack(side='left', fill='both')
         self.tv.tag_configure('skipped', background='#cccccc')
         self.tv.tag_configure('passed', foreground='forest green')
@@ -33,14 +32,14 @@ class test_gui:
         self.tv.configure(yscrollcommand=vsb.set)
         self.text = tk.Text()
         self.text.pack(side='left', fill='both')
-        
         self.log_path_map = {}
+
         def on_close():
             self.root.destroy()
             quit()
         self.root.protocol("WM_DELETE_WINDOW", on_close)
 
-    def tv_click(self, e):
+    def tv_click(self):
         self.text.delete(1.0, tk.END)
         sn = self.tv.selection()[0]
         if sn in self.log_path_map:
@@ -48,7 +47,7 @@ class test_gui:
             if os.path.isfile(f):
                 self.text.insert(1.0, "tail " + f + "\n")
                 self.text.insert(tk.END, "-----\n")
-                proc = sub.Popen(['tail',f],stdout=sub.PIPE)
+                proc = sub.Popen(['tail', f], stdout=sub.PIPE)
                 while True:
                     line = proc.stdout.readline()
                     if not line:
@@ -62,12 +61,15 @@ class test_gui:
         if log_path:
             self.log_path_map[sn] = log_path
         return sn
+
     def run(self, job_after):
         self.root.after(0, job_after)
         self.root.mainloop()
- 
+
+
 g_gui = test_gui()
 gui_en = True
+
 
 class test_base:
     def __init__(self, name: str):
@@ -83,11 +85,13 @@ class test_base:
         self._gui_tv_row_id = None
         self._ret_code = -1
         self._log_path = None
+
     def get_cwd(self) -> str:
         if self._parent:
             return self._parent.get_cwd() + "/" + self.get_name()
         else:
             return self.get_name()
+
     def get_name(self) -> str:
         return self._name
 
@@ -112,7 +116,6 @@ class test_base:
             self.set_gui_status("failed")
             self._status = 'failed'
 
-
     def update_last_status(self):
         for t in self._sub_tests:
             t.update_last_status()
@@ -120,7 +123,6 @@ class test_base:
         if s != "":
             self._status = s 
             self.set_gui_status(s)
-            
 
     def get_last_status(self):
         f_pass = self.get_cwd() + "/STATUS=PASSED"
@@ -148,6 +150,7 @@ class test_base:
                     t.filter_sub_test(name_to_run, 'any')
             t.filter_sub_test(name_to_run, type_name)
         return self
+
     def set_gui_status(self, text, tag=None):
         global g_gui
         global gui_en
@@ -174,15 +177,19 @@ class test_base:
             
     def get_status(self) -> str:
         return self._status
+
     def after(self, test):
         self._wait_test = test
         return self
+
     def _add_sub_test(self, test):
         test._parent = self
         self._sub_tests.append(test)
+
     def _set_type(self, t: str):
         self._type = t
         return self
+
     def _get_status_row(self):
         global failed_test_only
         rows = []
@@ -198,12 +205,14 @@ class test_base:
             row = t._get_status_row()
             rows.extend(row)
         return rows
+
     def _show_test(self):
         col = ['test_name', 'test_status', 'job_name', 'job_status', 'log']
         rows = self._get_status_row()
         tab = [col]
         tab.extend(rows)
         printTable(tab, self._name)
+
     def is_sub_tests_passed(self):
         ret = None
         for t in self._sub_tests:
@@ -214,8 +223,10 @@ class test_base:
                 else:
                     ret = True
         return ret
+
     def _run(self):
         raise NotImplementedError("class should impl run")
+
     def _wrap_run(self):
         global g_gui
         global gui_en
@@ -232,6 +243,7 @@ class test_base:
         self.set_gui_status(self._status)
         self._event.set()
         return self._ret_code
+
     def _parallel_run(self):
         for t in self._sub_tests:
             if not t._skip: 
@@ -239,22 +251,27 @@ class test_base:
                 th.setDaemon(True)
                 self._job_threads.append(th)
                 th.start()
+
     def _wait_job_done(self):
         for th in self._job_threads:
             th.join()
+
 
 class regression_test(test_base):
     def __init__(self, top_name):
         super().__init__(top_name)
         self._set_type("top")
+
     def create_test(self, name):
         t = test(name)._set_type("test")
         self._add_sub_test(t)
         global g_gui
         t._gui_tv_row_id = g_gui.add_row([t._name , "", "", ""])
         return t
+
     def show_test(self):
         self._show_test()
+
     def process(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-a', '--all', action='store_true', help='run all test')
@@ -301,14 +318,12 @@ class regression_test(test_base):
         else:
             self._status = "failed"
         self.show_test()
-        #self._show_test()
-        #self._cwd_proc()
-        #self._gen_pytest()
-        #self._run_pytest()
+
 
 class test(test_base):
     def __init__(self, test_name):
         super().__init__(test_name)
+
     def create_job(self, name):
         j = job(name)._set_type("job")
         self._add_sub_test(j)
@@ -316,6 +331,7 @@ class test(test_base):
         j._log_path = j.get_cwd() + '/run.log'
         j._gui_tv_row_id = g_gui.add_row(["", "", j._name, ""], j._log_path)
         return j
+
     def _run(self):
         ret_code = 0
         for j in self._sub_tests:
@@ -338,6 +354,7 @@ class job(test_base):
         self.file = file()
         self.env = env()
         self.cmd = cmd()
+
     def _run(self):
         cwd = self.get_cwd()
         sub.run('rm -rf ' + cwd, shell=True)
@@ -361,19 +378,23 @@ class file:
     def __init__(self):
         self.links = file_handles()
         self.copys = file_handles()
+
     def _put(self, cwd):
         self.links._put("ln -sf", cwd)
         self.copys._put("cp -rf", cwd)
 
+
 class file_handles:
     def __init__(self):
         self._list = []
+
     def add(self, path):
         if path is list:
             self._list.expand(path)
         else:
             self._list.append(path)
         return self
+
     def remove(self, f=None):
         if f is None:
             self._list.clear()
@@ -385,6 +406,7 @@ class file_handles:
                 print(self._list)
                 raise ValueError('"' + f + '" not in file list')
         return self
+
     def replace(self, f_from, f_to):
         if f_from in self._list:
             sn = self._list.index(f_from)
@@ -394,6 +416,7 @@ class file_handles:
             print(self._list)
             raise ValueError('"' + f_from + '" not in file list')
         return self
+
     def _put(self, sh_cmd, cwd):
         for f in self._list:
             sub.run(sh_cmd + " " + os.path.abspath(f) + " .", shell=True, cwd=cwd)
@@ -401,22 +424,27 @@ class file_handles:
 class env:
     def __init__(self):
         self._env = {}
+
     def set(self, var, val):
         self._env[var] = str(val)
         return self
+
     def _setup(self):
         for k,v in self._env.items():
             os.environ[k] = v
-        
+
+
 class cmd():
     def __init__(self):
         self._steps = []
+
     def add(self, cmd):
         if cmd is list:
             self._steps.extend(cmd)
         else:    
             self._steps.append(cmd)
         return self
+
     def remove(self, cmd=None):
         if cmd is None:
             self._steps.clear()
@@ -428,6 +456,7 @@ class cmd():
                 print(self._steps)
                 raise ValueError('"' + cmd + '" not in command list')
         return self
+
     def replace(self, cmd_from, cmd_to):
         if cmd_from in self._steps:
             sn = self._steps.index(cmd_from)
@@ -437,6 +466,7 @@ class cmd():
             print(self._steps)
             raise ValueError('"' + cmd_from + '" not in command list')
         return self
+
     def _run(self, cwd):
         log_f = cwd + '/run.log'
         sub.run('rm -f run.log', shell=True, cwd=cwd)
