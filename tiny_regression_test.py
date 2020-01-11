@@ -178,21 +178,23 @@ class test_base:
     def _set_type(self, t: str):
         self._type = t
         return self
-    def _get_status_row(self):
+    def _get_status_row(self, failed_only):
         rows = []
         status = self._status
         if self._type == "test":
             rows.append([self._name, status, '', '', ''])
         elif self._type == "job":
             rows.append(['', '', self._name, status, self._log_path])
+        if failed_only:
+            if all(s not in status for s in ['failed', 'error']):
+                rows = []
         for t in self._sub_tests:
-            row = t._get_status_row()
+            row = t._get_status_row(failed_only)
             rows.extend(row)
-        
         return rows
-    def _show_test(self, indent=0):
+    def _show_test(self, failed_only):
         col = ['test_name', 'test_status', 'job_name', 'job_status', 'log']
-        rows = self._get_status_row()
+        rows = self._get_status_row(failed_only)
         tab = [col]
         tab.extend(rows)
         printTable(tab, self._name)
@@ -245,8 +247,8 @@ class regression_test(test_base):
         global g_gui
         t._gui_tv_row_id = g_gui.add_row([t._name , "", "", ""])
         return t
-    def show_test(self, indent=0):
-        self._show_test(indent)
+    def show_test(self, failed_only):
+        self._show_test(failed_only)
     def process(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-a', '--all', action='store_true', help='run all test')
@@ -254,6 +256,7 @@ class regression_test(test_base):
         parser.add_argument('-j', '--job', nargs='*', help='run the specified job only')
         parser.add_argument('-l', '--list', action='store_true', help='list test only (dry run)')
         parser.add_argument('-g', '--gui', action='store_true', help='enable gui')
+        parser.add_argument('-f', '--failed', action='store_true', help='show failed test only')
         args = parser.parse_args()
         if len(sys.argv) == 1:
             parser.print_help()
@@ -281,7 +284,7 @@ class regression_test(test_base):
         else:
             if args.list:
                 self.update_status()
-                self.show_test()
+                self.show_test(args.failed)
                 return
             self._parallel_run()
         self._wait_job_done()
@@ -289,7 +292,7 @@ class regression_test(test_base):
             self._status = "passed"
         else:
             self._status = "failed"
-        self.show_test()
+        self.show_test(args.failed)
         #self._show_test()
         #self._cwd_proc()
         #self._gen_pytest()
