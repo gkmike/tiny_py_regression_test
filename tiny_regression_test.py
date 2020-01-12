@@ -39,7 +39,7 @@ class test_gui:
             quit()
         self.root.protocol("WM_DELETE_WINDOW", on_close)
 
-    def tv_click(self):
+    def tv_click(self, e):
         self.text.delete(1.0, tk.END)
         sn = self.tv.selection()[0]
         if sn in self.log_path_map:
