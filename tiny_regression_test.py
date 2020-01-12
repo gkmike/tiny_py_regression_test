@@ -360,8 +360,7 @@ class job(test_base):
         sub.run('rm -rf ' + cwd, shell=True)
         sub.run('mkdir -p ' + cwd, shell=True)
         self.file._put(cwd)
-        self.env._setup()
-        self._ret_code = self.cmd._run(cwd)
+        self._ret_code = self.cmd._run(cwd, self.env._env)
         if self._ret_code == 0:
             self._status = "passed"
         else:
@@ -374,6 +373,44 @@ class job(test_base):
         self.cmd = copy.deepcopy(j.cmd)
         return self
 
+
+class list_ext:
+    def __init__(self):
+        self._list = []
+
+    def add(self, obj):
+        ls = self._list
+        if obj is list:
+            ls.extend(obj)
+        else:
+            ls.append(obj)
+        return self
+
+    def remove(self, obj=None):
+        ls = self._list
+        if obj is None:
+            ls.clear()
+        else:
+            if obj in ls:
+                obj.remove(o)
+            else:
+                print("valid list:")
+                print(ls)
+                raise ValueError('"' + obj + '" not in list')
+        return self
+
+    def replace(self, obj_from, obj_to):
+        ls = self._list
+        if obj_from in ls:
+            sn = ls.index(obj_from)
+            ls[sn] = obj_to
+        else:
+            print("valid list:")
+            print(ls)
+            raise ValueError('"' + obj_from + '" not in list')
+        return self
+
+
 class file:
     def __init__(self):
         self.links = file_handles()
@@ -384,38 +421,9 @@ class file:
         self.copys._put("cp -rf", cwd)
 
 
-class file_handles:
+class file_handles(list_ext):
     def __init__(self):
-        self._list = []
-
-    def add(self, path):
-        if path is list:
-            self._list.expand(path)
-        else:
-            self._list.append(path)
-        return self
-
-    def remove(self, f=None):
-        if f is None:
-            self._list.clear()
-        else:
-            if f in self._list:
-                self._list.remove(f)
-            else:
-                print("valid file list:") 
-                print(self._list)
-                raise ValueError('"' + f + '" not in file list')
-        return self
-
-    def replace(self, f_from, f_to):
-        if f_from in self._list:
-            sn = self._list.index(f_from)
-            self._list[sn] = f_to
-        else:
-            print("valid file list:") 
-            print(self._list)
-            raise ValueError('"' + f_from + '" not in file list')
-        return self
+        super().__init__()
 
     def _put(self, sh_cmd, cwd):
         for f in self._list:
@@ -429,58 +437,33 @@ class env:
         self._env[var] = str(val)
         return self
 
-    def _setup(self):
-        for k,v in self._env.items():
-            os.environ[k] = v
-
-
-class cmd():
+class cmd(list_ext):
     def __init__(self):
-        self._steps = []
+        super().__init__()
 
-    def add(self, cmd):
-        if cmd is list:
-            self._steps.extend(cmd)
-        else:    
-            self._steps.append(cmd)
-        return self
-
-    def remove(self, cmd=None):
-        if cmd is None:
-            self._steps.clear()
-        else:
-            if cmd in self._steps:
-                self._steps.remove(cmd)
-            else:
-                print("valid command list:") 
-                print(self._steps)
-                raise ValueError('"' + cmd + '" not in command list')
-        return self
-
-    def replace(self, cmd_from, cmd_to):
-        if cmd_from in self._steps:
-            sn = self._steps.index(cmd_from)
-            self._steps[sn] = cmd_to
-        else:
-            print("valid command list:") 
-            print(self._steps)
-            raise ValueError('"' + cmd_from + '" not in command list')
-        return self
-
-    def _run(self, cwd):
+    def _run(self, cwd, env_setting):
         log_f = cwd + '/run.log'
         sub.run('rm -f run.log', shell=True, cwd=cwd)
-        sub.run('rm -f STATUS\=*', shell=True, cwd=cwd)
+        sub.run(r'rm -f STATUS\=*', shell=True, cwd=cwd)
         f = open(log_f, 'a')
-        for s in self._steps:
-            r = sub.run(s, shell=True, cwd=cwd, stdout=f, stderr=f)
-            if r.returncode != 0:
-                f.close()
-                sub.run('touch STATUS=FAILED', shell=True, cwd=cwd)
-                return r.returncode
+        for k,v in env_setting.items():
+            f.write("env " + k + '=' + v + '\n')
+        f.write('=======================\n')
+        f.flush()
+        env_setting = {**os.environ, **env_setting}
+        ret_code = None
+        for s in self._list:
+            r = sub.run(s, shell=True, cwd=cwd, stdout=f, stderr=f, env=env_setting)
+            ret_code = r.returncode
+            if ret_code != 0:
+                break
         f.close()
-        sub.run('touch STATUS=PASSED', shell=True, cwd=cwd)
-        return 0
+        if ret_code == 0:
+            sub.run('touch STATUS=PASSED', shell=True, cwd=cwd)
+        else:
+            sub.run('touch STATUS=FAILED', shell=True, cwd=cwd)
+        return ret_code
+
 
 """
 printTable by poke
