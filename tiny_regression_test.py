@@ -121,7 +121,7 @@ class test_base:
             t.update_last_status()
         s = self.get_last_status()
         if s != "":
-            self._status = s 
+            self._status = s
             self.set_gui_status(s)
 
     def get_last_status(self):
@@ -336,7 +336,7 @@ class test(test_base):
         ret_code = 0
         for j in self._sub_tests:
             if not j._skip:
-                if ret_code == 0: 
+                if ret_code == 0:
                     ret_code = j._wrap_run()
                 else:
                     j._event.set()
@@ -436,6 +436,12 @@ class env:
     def set(self, var, val):
         self._env[var] = str(val)
         return self
+
+    def unset(self, var=None):
+        if var is None:
+            self._env.clear()
+        else:
+            del self._env[var]
 
 class cmd(list_ext):
     def __init__(self):
