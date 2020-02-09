@@ -174,10 +174,10 @@ class test_base(table_handler):
     def update_last_status(self):
         for t in self._sub_tests:
             t.update_last_status()
-        passed = self.get_last_status()
+        passed = self.is_last_passed()
         self.set_passed_value(passed)
 
-    def get_last_status(self):
+    def is_last_passed(self):
         f_pass = self.get_cwd() + "/STATUS=PASSED"
         f_fail = self.get_cwd() + "/STATUS=FAILED"
         passed = None
@@ -193,10 +193,12 @@ class test_base(table_handler):
                 if name_to_run not in t._name:
                     t._event.set()
                     t._skip = True
-                    l = t.get_last_status()
+                    passed = t.is_last_passed()
                     s = "skipped"
-                    if l != "":
-                        s += " (last " + l + ")"
+                    if passed:
+                        s += " (last passed)"
+                    else:
+                        s += " (last failed)"
                     t.set_status(s, "skipped")
                     t.filter_sub_test(name_to_run, 'any')
             t.filter_sub_test(name_to_run, type_name)
@@ -383,7 +385,7 @@ class list_ext:
 
     def add(self, obj):
         ls = self._list
-        if obj is list:
+        if isinstance(obj, list):
             ls.extend(obj)
         else:
             ls.append(obj)
@@ -455,9 +457,10 @@ class cmd(list_ext):
         sub.run('rm -f run.log', shell=True, cwd=cwd)
         sub.run(r'rm -f STATUS\=*', shell=True, cwd=cwd)
         f = open(log_f, 'a')
+        f.write('------------------------\n* Env Settings:\n')
         for k,v in env_setting.items():
-            f.write("env " + k + '=' + v + '\n')
-        f.write('=======================\n')
+            f.write(k + '=' + v + '\n')
+        f.write('------------------------\n* Commands Start:\n')
         f.flush()
         env_setting = {**os.environ, **env_setting}
         passed = True
@@ -466,6 +469,7 @@ class cmd(list_ext):
             ret_code = r.returncode
             if ret_code != 0:
                 passed = False
+                f.write('------------------------\n* Error Command: ' + s)
                 break
         f.close()
         if passed:
