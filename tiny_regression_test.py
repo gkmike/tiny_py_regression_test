@@ -7,6 +7,7 @@ import copy
 import threading
 import tkinter.ttk as ttk
 import tkinter as tk
+import queue
 
 failed_test_only = False
 
@@ -145,6 +146,8 @@ class table_handler:
             rows.extend(row)
         return rows
 
+job_queue = queue.Queue()
+
 class test_base(table_handler):
     def __init__(self, name: str):
         super().__init__()
@@ -263,11 +266,18 @@ class test_base(table_handler):
 
     def _parallel_run(self):
         for t in self._sub_tests:
-            if not t._skip: 
-                th = threading.Thread(target=t._wrap_run)
-                th.setDaemon(True)
-                self._tests_in_thread.append(th)
-                th.start()
+            if not t._skip:
+                job_queue.put(t._wrap_run)
+        for th in range(self.workers):
+            th = threading.Thread(target=self._do_queue_job)
+            th.setDaemon(True)
+            self._tests_in_thread.append(th)
+            th.start()
+
+    def _do_queue_job(self):
+        while job_queue.qsize() > 0:
+            job = job_queue.get()
+            job()
 
     def _wait_job_done(self):
         for th in self._tests_in_thread:
@@ -278,6 +288,7 @@ class regression_test(test_base):
     def __init__(self, top_name):
         super().__init__(top_name)
         self._set_type("top")
+        self.workers = 2
 
     def create_test(self, name):
         t = test(name)._set_type("test")
@@ -295,6 +306,7 @@ class regression_test(test_base):
         parser.add_argument('-l', '--list', action='store_true', help='list test only (dry run)')
         parser.add_argument('-g', '--gui', action='store_true', help='enable gui')
         parser.add_argument('-f', '--failed', action='store_true', help='show failed test only')
+        parser.add_argument('-w', '--workers', type=int, default=2, help='thread workers limit, default=2')
         args = parser.parse_args()
         global failed_test_only
         failed_test_only = args.failed
@@ -310,6 +322,8 @@ class regression_test(test_base):
         if not args.gui:
             global gui_en
             gui_en = False
+
+        self.workers = args.workers
                        
         if args.gui:
             if len(sys.argv) == 2:
