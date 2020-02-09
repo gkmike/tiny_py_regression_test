@@ -13,8 +13,6 @@ failed_test_only = False
 class test_gui:
     def __init__(self):
         self.root = tk.Tk()
-        self.row_ptr = 0
-        self.col_ptr = 0
         self.tv = ttk.Treeview(self.root, columns=['0', '1', '2', '3'], show='headings')
         self.tv.bind('<ButtonRelease-1>', self.tv_click)
         self.tv.heading('0', text='test_name')
@@ -56,7 +54,6 @@ class test_gui:
                     self.text.insert(tk.END, line)
 
     def add_row(self, text_list, log_path=None):
-        self.row_ptr += 1
         sn = self.tv.insert('', 'end', value=text_list)
         if log_path:
             self.log_path_map[sn] = log_path
@@ -66,94 +63,29 @@ class test_gui:
         self.root.after(0, job_after)
         self.root.mainloop()
 
-
 g_gui = test_gui()
 gui_en = True
 
 
-class test_base:
-    def __init__(self, name: str):
-        self._name = name
-        self._skip = False
-        self._parent = None
-        self._event = threading.Event()
-        self._wait_test = None
-        self._status = ""
-        self._type = None
-        self._sub_tests = []
-        self._job_threads = []
+class table_handler:
+    def __init__(self):
         self._gui_tv_row_id = None
-        self._ret_code = -1
-        self._log_path = None
+        self._parent = None
+        self._sub_tests = []
+        self._status = ""
+        self._is_passed = None
+        self._type = None
 
-    def get_cwd(self) -> str:
-        if self._parent:
-            return self._parent.get_cwd() + "/" + self.get_name()
-        else:
-            return self.get_name()
+    def add_sub_test(self, t):
+        pass
 
-    def get_name(self) -> str:
-        return self._name
-
-    def update_status(self):
-        self.update_last_status()
-        self.update_parent_status()   
- 
-    def update_parent_status(self):
-        if len(self._sub_tests) == 0:
-            return
-        for t in self._sub_tests:
-            t.update_parent_status()
-        passed = self.is_sub_tests_passed()
-        if passed is None:
-            self.set_gui_status("")
-            self._status = ''
-            return
-        if passed:
-            self.set_gui_status("passed")
-            self._status = 'passed'
-        else:
-            self.set_gui_status("failed")
-            self._status = 'failed'
-
-    def update_last_status(self):
-        for t in self._sub_tests:
-            t.update_last_status()
-        s = self.get_last_status()
-        if s != "":
-            self._status = s
-            self.set_gui_status(s)
-
-    def get_last_status(self):
-        f_pass = self.get_cwd() + "/STATUS=PASSED"
-        f_fail = self.get_cwd() + "/STATUS=FAILED"
-        if os.path.isfile(f_pass):
-            self._status = "passed"
-            self._ret_code = 0
-        elif os.path.isfile(f_fail):
-            self._status = "failed"
-            self._ret_code = 1
-        return self._status
-
-    def filter_sub_test(self, name_to_run, type_name):
-        for t in self._sub_tests:            
-            if type_name == t._type or type_name == 'any':
-                if name_to_run not in t._name:
-                    t._event.set()
-                    t._skip = True
-                    l = t.get_last_status()
-                    s = "skipped"
-                    if l != "":
-                        s += " (last " + l + ")"
-                    t._status = s
-                    t.set_gui_status(s, "skipped")
-                    t.filter_sub_test(name_to_run, 'any')
-            t.filter_sub_test(name_to_run, type_name)
-        return self
-
-    def set_gui_status(self, text, tag=None):
+    def add_sub_job(self, j):
+        pass
+    
+    def set_status(self, text, tag=None):
         global g_gui
         global gui_en
+        self._status = text
         if tag is None:
             tag = text
         if gui_en:
@@ -172,23 +104,30 @@ class test_base:
             cwd = self.get_cwd()
             cwd = ('...' + cwd[-40:]) if len(cwd) > 40 else cwd
             output = '[' + time.asctime() + '] ' + cwd + " => " + text
-            print(" "*100, end='\r')
+            print(" " * 100, end='\r')
             print(output, end='\r')
-            
-    def get_status(self) -> str:
-        return self._status
 
-    def after(self, test):
-        self._wait_test = test
-        return self
+    def set_passed(self):
+        self.set_status('passed')
+        self._is_passed = True
 
-    def _add_sub_test(self, test):
-        test._parent = self
-        self._sub_tests.append(test)
+    def set_failed(self):
+        self.set_status('failed')
+        self._is_passed = False
 
-    def _set_type(self, t: str):
-        self._type = t
-        return self
+    def set_passed_value(self, is_passed):
+        if is_passed == True:
+            self.set_passed()
+        elif is_passed == False:
+            self.set_failed()
+        else:
+            self.set_status('')
+
+    def get_cwd(self) -> str:
+        if self._parent:
+            return self._parent.get_cwd() + "/" + self.get_name()
+        else:
+            return self.get_name()
 
     def _get_status_row(self):
         global failed_test_only
@@ -206,6 +145,84 @@ class test_base:
             rows.extend(row)
         return rows
 
+class test_base(table_handler):
+    def __init__(self, name: str):
+        super().__init__()
+        self._name = name
+        self._skip = False
+        self._event = threading.Event()
+        self._wait_test = None
+        self._tests_in_thread = []
+        self._log_path = None
+
+    def get_name(self) -> str:
+        return self._name
+
+    def update_status(self):
+        self.update_last_status()
+        self.update_parent_status()   
+ 
+    def update_parent_status(self):
+        if len(self._sub_tests) == 0:
+            return
+        for t in self._sub_tests:
+            t.update_parent_status()
+        passed = self.is_sub_tests_passed()
+        self.set_passed_value(passed)
+
+
+    def update_last_status(self):
+        for t in self._sub_tests:
+            t.update_last_status()
+        passed = self.get_last_status()
+        self.set_passed_value(passed)
+
+    def get_last_status(self):
+        f_pass = self.get_cwd() + "/STATUS=PASSED"
+        f_fail = self.get_cwd() + "/STATUS=FAILED"
+        passed = None
+        if os.path.isfile(f_pass):
+            passed = True
+        elif os.path.isfile(f_fail):
+            passed = False
+        return passed
+
+    def filter_sub_test(self, name_to_run, type_name):
+        for t in self._sub_tests:            
+            if type_name == t._type or type_name == 'any':
+                if name_to_run not in t._name:
+                    t._event.set()
+                    t._skip = True
+                    l = t.get_last_status()
+                    s = "skipped"
+                    if l != "":
+                        s += " (last " + l + ")"
+                    t.set_status(s, "skipped")
+                    t.filter_sub_test(name_to_run, 'any')
+            t.filter_sub_test(name_to_run, type_name)
+        return self
+
+    def after(self, test):
+        self._wait_test = test
+        return self
+
+    def _add_sub_test(self, test):
+        test._parent = self
+        self._sub_tests.append(test)
+        global g_gui
+        test._gui_tv_row_id = g_gui.add_row([test._name, "", "", ""])
+
+    def _add_sub_job(self, job):
+        job._parent = self
+        self._sub_tests.append(job)
+        global g_gui
+        job._log_path = job.get_cwd() + '/run.log'
+        job._gui_tv_row_id = g_gui.add_row(["", "", job._name, ""], job._log_path)
+
+    def _set_type(self, t: str):
+        self._type = t
+        return self
+
     def _show_test(self):
         col = ['test_name', 'test_status', 'job_name', 'job_status', 'log']
         rows = self._get_status_row()
@@ -216,44 +233,42 @@ class test_base:
     def is_sub_tests_passed(self):
         ret = None
         for t in self._sub_tests:
-            if t._status != "":
-                if t._ret_code != 0:
-                    ret = False
-                    return ret
-                else:
-                    ret = True
+            if t._is_passed == False:
+                ret = False
+                return ret
+            elif t._is_passed == True:
+                ret = True
         return ret
 
     def _run(self):
         raise NotImplementedError("class should impl run")
 
     def _wrap_run(self):
-        global g_gui
-        global gui_en
+        #global g_gui
+        #global gui_en
         if self._wait_test:
-            self.set_gui_status("wait dependency", "waiting")
+            self.set_status("wait dependency", "waiting")
             self._wait_test._event.wait()
-            if self._wait_test._ret_code != 0:
-                self.set_gui_status("dependency error", 'failed')
-                self._status = "dependency error"
+            if not self._wait_test._is_passed:
+                self.set_status("dependency error", 'failed')
                 self._event.set()
-                return -1
-        self.set_gui_status("running")
-        self._ret_code = self._run()
-        self.set_gui_status(self._status)
+                return False
+        self.set_status("running")
+        passed = self._run()
+        self.set_passed_value(passed)
         self._event.set()
-        return self._ret_code
+        return passed
 
     def _parallel_run(self):
         for t in self._sub_tests:
             if not t._skip: 
                 th = threading.Thread(target=t._wrap_run)
                 th.setDaemon(True)
-                self._job_threads.append(th)
+                self._tests_in_thread.append(th)
                 th.start()
 
     def _wait_job_done(self):
-        for th in self._job_threads:
+        for th in self._tests_in_thread:
             th.join()
 
 
@@ -265,8 +280,6 @@ class regression_test(test_base):
     def create_test(self, name):
         t = test(name)._set_type("test")
         self._add_sub_test(t)
-        global g_gui
-        t._gui_tv_row_id = g_gui.add_row([t._name , "", "", ""])
         return t
 
     def show_test(self):
@@ -314,9 +327,9 @@ class regression_test(test_base):
             self._parallel_run()
         self._wait_job_done()
         if self.is_sub_tests_passed():
-            self._status = "passed"
+            self.set_passed()
         else:
-            self._status = "failed"
+            self.set_failed()
         self.show_test()
 
 
@@ -326,26 +339,19 @@ class test(test_base):
 
     def create_job(self, name):
         j = job(name)._set_type("job")
-        self._add_sub_test(j)
-        global g_gui
-        j._log_path = j.get_cwd() + '/run.log'
-        j._gui_tv_row_id = g_gui.add_row(["", "", j._name, ""], j._log_path)
+        self._add_sub_job(j)
         return j
 
     def _run(self):
-        ret_code = 0
+        passed = True
         for j in self._sub_tests:
             if not j._skip:
-                if ret_code == 0:
-                    ret_code = j._wrap_run()
+                if passed:
+                    passed = j._wrap_run()
                 else:
                     j._event.set()
-        if ret_code == 0:
-            self._status = "passed"
-        else:
-            self._status = "failed"
-        self._ret_code = ret_code
-        return ret_code
+        self.set_passed_value(passed)
+        return passed
         
 
 class job(test_base):
@@ -360,12 +366,9 @@ class job(test_base):
         sub.run('rm -rf ' + cwd, shell=True)
         sub.run('mkdir -p ' + cwd, shell=True)
         self.file._put(cwd)
-        self._ret_code = self.cmd._run(cwd, self.env._env)
-        if self._ret_code == 0:
-            self._status = "passed"
-        else:
-            self._status = "failed (exit_code: " + str(self._ret_code) + ")"
-        return self._ret_code
+        passed = self.cmd._run(cwd, self.env._env)
+        self.set_passed_value(passed)
+        return passed
         
     def copy_from(self, j):
         self.file = copy.deepcopy(j.file)
@@ -457,18 +460,19 @@ class cmd(list_ext):
         f.write('=======================\n')
         f.flush()
         env_setting = {**os.environ, **env_setting}
-        ret_code = None
+        passed = True
         for s in self._list:
             r = sub.run(s, shell=True, cwd=cwd, stdout=f, stderr=f, env=env_setting)
             ret_code = r.returncode
             if ret_code != 0:
+                passed = False
                 break
         f.close()
-        if ret_code == 0:
+        if passed:
             sub.run('touch STATUS=PASSED', shell=True, cwd=cwd)
         else:
             sub.run('touch STATUS=FAILED', shell=True, cwd=cwd)
-        return ret_code
+        return passed
 
 
 """
