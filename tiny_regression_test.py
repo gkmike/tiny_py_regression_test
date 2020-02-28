@@ -32,11 +32,24 @@ class test_gui:
         self.text = tk.Text()
         self.text.pack(side='left', fill='both')
         self.log_path_map = {}
+        self.repeat_th = None
+        self.stopped = threading.Event()
 
         def on_close():
             self.root.destroy()
             quit()
         self.root.protocol("WM_DELETE_WINDOW", on_close)
+
+    def repeat_tv_click(self):
+        if self.repeat_th == None:
+            th = threading.Thread(target=self.th_repeat)
+            th.setDaemon(True)
+            th.start()
+            self.repeat_th = th
+    
+    def th_repeat(self):
+        while not self.stopped.wait(10):
+            self.tv_click(None)
 
     def tv_click(self, e):
         self.text.delete(1.0, tk.END)
@@ -53,6 +66,7 @@ class test_gui:
                         break
                     line = line.decode()
                     self.text.insert(tk.END, line)
+            self.repeat_tv_click()
 
     def add_row(self, text_list, log_path=None):
         sn = self.tv.insert('', 'end', value=text_list)
