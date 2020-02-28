@@ -193,10 +193,13 @@ class test_base(table_handler):
     def filter_sub_test(self, name_to_run, type_name):
         for t in self._sub_tests:            
             if type_name == t._type or type_name == 'any':
+                passed = t.is_last_passed()
+                skip_cond = 0
                 if name_to_run not in t._name:
+                    skip_cond = 1
+                if skip_cond:
                     t._event.set()
                     t._skip = True
-                    passed = t.is_last_passed()
                     s = "skipped"
                     if passed == True:
                         s += " (last passed)"
@@ -206,6 +209,18 @@ class test_base(table_handler):
                     t.filter_sub_test(name_to_run, 'any')
             t.filter_sub_test(name_to_run, type_name)
         return self
+
+    def skip_passed_job(self):
+        for t in self._sub_tests:            
+            passed = t.is_last_passed()
+            if passed:
+                t._event.set()
+                t._skip = True
+                t.set_passed_value(passed)
+                t.set_status("skipping passed", "skipped")
+            t.skip_passed_job()
+        return self
+
 
     def after(self, test):
         self._wait_test = test
@@ -306,6 +321,7 @@ class regression_test(test_base):
         parser.add_argument('-l', '--list', action='store_true', help='list test only (dry run)')
         parser.add_argument('-g', '--gui', action='store_true', help='enable gui')
         parser.add_argument('-f', '--failed', action='store_true', help='show failed test only')
+        parser.add_argument('-s', '--skip-passed', action='store_true', help='skip passed jobs')
         parser.add_argument('-w', '--workers', type=int, default=2, help='thread workers limit, default=2')
         args = parser.parse_args()
         global failed_test_only
@@ -319,6 +335,8 @@ class regression_test(test_base):
         if args.job:
             for j in args.job:
                 self.filter_sub_test(j, "job")
+        if args.skip_passed:
+            self.skip_passed_job()
         if not args.gui:
             global gui_en
             gui_en = False
