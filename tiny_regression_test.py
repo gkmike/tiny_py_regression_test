@@ -198,9 +198,9 @@ class test_base(table_handler):
                     t._skip = True
                     passed = t.is_last_passed()
                     s = "skipped"
-                    if passed:
+                    if passed == True:
                         s += " (last passed)"
-                    else:
+                    elif passed == False:
                         s += " (last failed)"
                     t.set_status(s, "skipped")
                     t.filter_sub_test(name_to_run, 'any')
