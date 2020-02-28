@@ -188,25 +188,47 @@ class test_base(table_handler):
             passed = False
         return passed
 
-    def filter_sub_test(self, name_to_run, type_name):
-        for t in self._sub_tests:            
-            if type_name == t._type or type_name == 'any':
-                passed = t.is_last_passed()
-                skip_cond = 0
-                if name_to_run not in t._name:
-                    skip_cond = 1
-                if skip_cond:
-                    t._event.set()
-                    t._skip = True
-                    s = "skipped"
-                    if passed == True:
-                        s += " (last passed)"
-                    elif passed == False:
-                        s += " (last failed)"
-                    t.set_status(s, "skipped")
-                    t.filter_sub_test(name_to_run, 'any')
-            t.filter_sub_test(name_to_run, type_name)
-        return self
+    def skip_all_test(self):
+        for t in self._sub_tests:
+            passed = t.is_last_passed()
+            t._skip = True
+            t._event.set()
+            s = "skipped"
+            if passed == True:
+                s += " (last passed)"
+            elif passed == False:
+                s += " (last failed)"
+            t.set_status(s, "skipped")
+            t.skip_all_test()
+
+    def en_test(self, name_to_en, set_job_later):
+        for t in self._sub_tests:
+            if name_to_en in t._name:
+                t._event.clear()
+                t._skip = False
+                t.set_status("", "")
+                if set_job_later == False:
+                    for j in t._sub_tests:
+                        j._event.clear()
+                        j._skip = False
+                        j.set_status("", "")
+
+    def en_job(self, name_to_en, set_test_before):
+        for t in self._sub_tests:
+            for j in t._sub_tests:
+                if name_to_en in j._name:
+                    if set_test_before:
+                        if t._skip == False:
+                            j._event.clear()
+                            j._skip = False
+                            j.set_status("", "")
+                    else:
+                        j._event.clear()
+                        j._skip = False
+                        j.set_status("", "")
+                        t._event.clear()
+                        t._skip = False
+                        t.set_status("", "")
 
     def skip_passed_job(self):
         for t in self._sub_tests:            
@@ -332,12 +354,20 @@ class regression_test(test_base):
         if len(sys.argv) == 1:
             parser.print_help()
             return
+        if args.test or args.job:
+            self.skip_all_test()
         if args.test:
-            for t in args.test:
-                self.filter_sub_test(t, "test")
+            set_job_later = False
+            if args.job:
+                set_job_later = True
+            for test_name in args.test:
+                self.en_test(test_name, set_job_later)
         if args.job:
-            for j in args.job:
-                self.filter_sub_test(j, "job")
+            set_test_before = False
+            if args.test:
+                set_test_before = True
+            for job_name in args.job:
+                self.en_job(job_name, set_test_before)
         if args.skip_passed:
             self.skip_passed_job()
 
