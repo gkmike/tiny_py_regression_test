@@ -64,8 +64,7 @@ class test_gui:
         self.root.after(0, job_after)
         self.root.mainloop()
 
-g_gui = test_gui()
-gui_en = True
+g_gui = None
 
 
 class table_handler:
@@ -85,11 +84,10 @@ class table_handler:
     
     def set_status(self, text, tag=None):
         global g_gui
-        global gui_en
         self._status = text
         if tag is None:
             tag = text
-        if gui_en:
+        if g_gui:
             if self._type == "test":
                 col = '1'
             elif self._type == "job":
@@ -230,14 +228,16 @@ class test_base(table_handler):
         test._parent = self
         self._sub_tests.append(test)
         global g_gui
-        test._gui_tv_row_id = g_gui.add_row([test._name, "", "", ""])
+        if g_gui:
+            test._gui_tv_row_id = g_gui.add_row([test._name, "", "", ""])
 
     def _add_sub_job(self, job):
         job._parent = self
         self._sub_tests.append(job)
-        global g_gui
         job._log_path = job.get_cwd() + '/run.log'
-        job._gui_tv_row_id = g_gui.add_row(["", "", job._name, ""], job._log_path)
+        global g_gui
+        if g_gui:
+            job._gui_tv_row_id = g_gui.add_row(["", "", job._name, ""], job._log_path)
 
     def _set_type(self, t: str):
         self._type = t
@@ -264,8 +264,6 @@ class test_base(table_handler):
         raise NotImplementedError("class should impl run")
 
     def _wrap_run(self):
-        #global g_gui
-        #global gui_en
         if self._wait_test:
             self.set_status("wait dependency", "waiting")
             self._wait_test._event.wait()
@@ -304,16 +302,6 @@ class regression_test(test_base):
         super().__init__(top_name)
         self._set_type("top")
         self.workers = 2
-
-    def create_test(self, name):
-        t = test(name)._set_type("test")
-        self._add_sub_test(t)
-        return t
-
-    def show_test(self):
-        self._show_test()
-
-    def process(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('-a', '--all', action='store_true', help='run all test')
         parser.add_argument('-t', '--test', nargs='*', help='run the specified test only')
@@ -324,6 +312,21 @@ class regression_test(test_base):
         parser.add_argument('-s', '--skip-passed', action='store_true', help='skip passed jobs')
         parser.add_argument('-w', '--workers', type=int, default=2, help='thread workers limit, default=2')
         args = parser.parse_args()
+        self.args = args
+        if args.gui:
+            global g_gui
+            g_gui = test_gui()
+
+    def create_test(self, name):
+        t = test(name)._set_type("test")
+        self._add_sub_test(t)
+        return t
+
+    def show_test(self):
+        self._show_test()
+
+    def process(self):
+        args = self.args
         global failed_test_only
         failed_test_only = args.failed
         if len(sys.argv) == 1:
@@ -337,9 +340,6 @@ class regression_test(test_base):
                 self.filter_sub_test(j, "job")
         if args.skip_passed:
             self.skip_passed_job()
-        if not args.gui:
-            global gui_en
-            gui_en = False
 
         self.workers = args.workers
                        
