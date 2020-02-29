@@ -289,6 +289,9 @@ class test_base(table_handler):
     def is_sub_tests_passed(self):
         ret = None
         for t in self._sub_tests:
+            if t._skip == True:
+                ret = True
+                continue
             if t._is_passed == False:
                 ret = False
                 return ret
@@ -409,6 +412,9 @@ class regression_test(test_base):
         else:
             self.set_failed()
         self.show_test()
+
+        if not self._is_passed:
+            exit(1)
 
 
 class test(test_base):
