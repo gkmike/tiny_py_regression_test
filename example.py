@@ -20,8 +20,10 @@ test2 = rt.create_test("code_test_no_opt")
 build_job2 = test2.create_job("build_code").copy_from(build_job)
 build_job2.env.unset()
 build_job2.env.set("OPT", "-O0")
-sim_job2 = test2.create_job("run_program").copy_from(sim_job)
-sim_job2.file.links.replace(build_job.get_cwd() + '/*', build_job2.get_cwd() + '/*')
+sim_job2 = test2.create_job("run_program")
+sim_job2.file.links.add(build_job2.get_cwd() + '/*')
+sim_job2.cmd = sim_job.cmd
+sim_job2.env = sim_job.env
 
 test3 = rt.create_test("code_test_new_str")
 sim_job3 = test3.create_job("run_program").copy_from(sim_job2).after(sim_job2)
