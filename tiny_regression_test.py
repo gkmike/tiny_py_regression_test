@@ -352,6 +352,7 @@ class regression_test(test_base):
         parser.add_argument('-w', '--workers', type=int, default=2, help='thread workers limit, default=2')
         args = parser.parse_args()
         self.args = args
+        self.parser = parser
         if args.gui:
             global g_gui
             g_gui = test_gui()
@@ -369,7 +370,7 @@ class regression_test(test_base):
         global failed_test_only
         failed_test_only = args.failed
         if len(sys.argv) == 1:
-            parser.print_help()
+            self.parser.print_help()
             return
         if args.test or args.job:
             self.skip_all_test()
@@ -392,7 +393,7 @@ class regression_test(test_base):
                        
         if args.gui:
             if len(sys.argv) == 2:
-                parser.print_help()
+                self.parser.print_help()
                 return
             global g_gui
             if args.list:
