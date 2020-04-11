@@ -255,6 +255,20 @@ class test_base(table_handler):
             t.skip_passed_job()
         return self
 
+    def skip_passed_test(self):
+        for t in self._sub_tests:            
+            all_passed = True
+            for j in t._sub_tests:            
+                passed = j.is_last_passed()
+                if not passed:
+                    all_passed = False
+            if all_passed:
+                for j in t._sub_tests:
+                    j._event.set()
+                    j._skip = True
+                    j.set_passed_value(True)
+                    j.set_status("skipping passed", "skipped")
+        return self
 
     def after(self, test):
         self._wait_test = test
@@ -348,7 +362,8 @@ class regression_test(test_base):
         parser.add_argument('-l', '--list', action='store_true', help='list test only (dry run)')
         parser.add_argument('-g', '--gui', action='store_true', help='enable gui')
         parser.add_argument('-f', '--failed', action='store_true', help='show failed test only')
-        parser.add_argument('-s', '--skip-passed', action='store_true', help='skip passed jobs')
+        parser.add_argument('-s', '--skip-passed-job', action='store_true', help='skip passed jobs')
+        parser.add_argument('--skip-passed-test', action='store_true', help='skip passed test. redo entire jobs in test')
         parser.add_argument('-w', '--workers', type=int, default=2, help='thread workers limit, default=2')
         args = parser.parse_args()
         self.args = args
@@ -386,8 +401,12 @@ class regression_test(test_base):
                 set_test_before = True
             for job_name in args.job:
                 self.en_job(job_name, set_test_before)
-        if args.skip_passed:
+        if args.skip_passed_job and args.skip_passed_test:
+            raise ValueError("can't skip passed test/job in the same time")
+        if args.skip_passed_job:
             self.skip_passed_job()
+        elif args.skip_passed_test:
+            self.skip_passed_test()
 
         self.workers = args.workers
                        
