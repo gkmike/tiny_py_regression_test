@@ -304,7 +304,7 @@ class test_base(table_handler):
         ret = None
         for t in self._sub_tests:
             if t._skip == True:
-                ret = True
+                ret = None
                 continue
             if t._is_passed == False:
                 ret = False
@@ -409,6 +409,7 @@ class regression_test(test_base):
             self.skip_passed_test()
 
         self.workers = args.workers
+        self.update_status()
                        
         if args.gui:
             if len(sys.argv) == 2:
